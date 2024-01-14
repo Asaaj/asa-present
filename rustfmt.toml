@@ -1,0 +1,23 @@
+unstable_features = true
+edition = "2021"
+
+max_width = 100
+use_small_heuristics = "Max"
+
+wrap_comments = true
+normalize_comments = true
+
+format_code_in_doc_comments = true
+normalize_doc_attributes = true
+
+group_imports = "StdExternalCrate"
+imports_granularity = "Module"
+
+reorder_impl_items = true
+
+fn_single_line = true
+
+format_macro_bodies = true
+format_macro_matchers = false
+
+hard_tabs = true

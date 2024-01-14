@@ -1,0 +1,20 @@
+[workspace]
+members = [
+    "asa-server",
+    "top-crates",
+]
+default-members = [
+    "asa-server",
+    "top-crates",
+]
+resolver = "2"
+
+[profile.release]
+debug = true
+opt-level = "s"
+lto = true
+
+#[profile.dev.package.image]
+#opt-level = 3
+#[profile.dev.package.png]
+#opt-level = 3

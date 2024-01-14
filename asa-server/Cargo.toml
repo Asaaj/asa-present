@@ -1,0 +1,19 @@
+[package]
+name = "asa-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-mutex = "1.4"
+orchestrator = { path = "./compiler/rust-base/orchestrator" }
+rocket = { version = "0.5", features = ["json"] }
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+snafu = "0.8"
+tokio = { version = "1.35" }
+tokio-util = "0.7"
+tracing = "0.1"
+
+[build-dependencies]
+rust-playground-top-crates = { path = "../top-crates", version = "0.1.0" }

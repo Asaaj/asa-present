@@ -1,0 +1,9 @@
+wasm-pack.log
+
+.idea/
+.fleet/
+**/*.rs.bk
+
+target/
+/pkg/
+*.exe
