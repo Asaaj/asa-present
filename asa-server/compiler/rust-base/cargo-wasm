@@ -33,12 +33,4 @@ cargo "build" "--target=wasm32-unknown-unknown" ${args[@]+"${args[@]}"}
 for wasm in $(find target/ -name '*wasm' -not -path '*/deps/*'); do
     echo "found ${wasm}" >> "${log}"
     cp "${wasm}" "${output}"
-
-    # Convert to textual format, demangling as we go
-#    wasm-tools demangle "${wasm}" -t -o "${output}.wat"
-
-    # The streaming playground expects the file to be without the
-    # extension while the original playground expects it to be with
-    # the extension. Support both for now.
-#    cp "${output}.wat" "${output}"
 done

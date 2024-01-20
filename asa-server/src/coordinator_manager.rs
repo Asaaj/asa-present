@@ -2,7 +2,6 @@ use std::future::Future;
 use std::sync::Arc;
 
 use orchestrator::coordinator::{self, Coordinator, DockerBackend};
-
 use rocket::tokio::sync::Semaphore;
 use rocket::tokio::task::JoinSet;
 use snafu::{OptionExt, ResultExt, Snafu};
@@ -18,7 +17,6 @@ pub struct MetaInner {
 }
 
 type Meta = Arc<MetaInner>;
-type TaggedError = (Error, Option<Meta>);
 pub type SharedCoordinator = Arc<Coordinator<DockerBackend>>;
 
 #[derive(Debug, Snafu)]
@@ -41,7 +39,7 @@ type CoordinatorManagerResult<T, E = CoordinatorManagerError> = Result<T, E>;
 
 pub struct CoordinatorManager {
 	coordinator: SharedCoordinator,
-	tasks: JoinSet<Result<(), TaggedError>>,
+	tasks: JoinSet<Result<(), Error>>,
 	semaphore: Arc<Semaphore>,
 	abort_handle: Option<AbortHandle>,
 }
@@ -60,9 +58,7 @@ impl CoordinatorManager {
 
 	pub fn is_empty(&self) -> bool { self.tasks.is_empty() }
 
-	pub async fn join_next(
-		&mut self,
-	) -> Option<Result<Result<(), TaggedError>, tokio::task::JoinError>> {
+	pub async fn join_next(&mut self) -> Option<Result<Result<(), Error>, tokio::task::JoinError>> {
 		self.tasks.join_next().await
 	}
 
@@ -70,7 +66,7 @@ impl CoordinatorManager {
 	where
 		F: FnOnce(SharedCoordinator) -> Fut,
 		F: 'static + Send,
-		Fut: Future<Output = Result<(), TaggedError>>,
+		Fut: Future<Output = Result<(), Error>>,
 		Fut: 'static + Send,
 	{
 		let coordinator = self.coordinator.clone();

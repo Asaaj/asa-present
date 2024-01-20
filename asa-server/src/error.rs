@@ -56,6 +56,9 @@ pub(crate) enum Error {
 	#[snafu(display("Unable to spawn a coordinator task"))]
 	StreamingCoordinatorSpawn { source: coordinator_manager::CoordinatorManagerError },
 
+	#[snafu(display("Unable to send result through channel: {}", text))]
+	ResultChannelFailed { text: String },
+
 	#[snafu(display("The worker panicked: {}", text))]
 	TaskPanic { text: String },
 }
