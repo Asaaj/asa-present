@@ -223,22 +223,58 @@ pub enum CompileTarget {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Channel {
+pub enum RustChannel {
 	Stable,
 	Beta,
 	Nightly,
 }
 
-impl Channel {
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum CppVersion {
+	Cpp17,
+	Cpp20,
+	Cpp23,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct RustSpec {
+	channel: RustChannel,
+	edition: RustEdition,
+}
+impl RustSpec {
+	pub fn new(channel: RustChannel, edition: RustEdition) -> Self { Self { channel, edition } }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct CppSpec {
+	version: CppVersion,
+}
+impl CppSpec {
+	pub fn new(version: CppVersion) -> Self { Self { version } }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Language {
+	Rust(RustSpec),
+	Cpp(CppSpec),
+}
+impl Into<Language> for RustSpec {
+	fn into(self) -> Language { Language::Rust(self) }
+}
+impl Into<Language> for CppSpec {
+	fn into(self) -> Language { Language::Cpp(self) }
+}
+
+impl RustChannel {
 	#[cfg(test)]
 	pub(crate) const ALL: [Self; 3] = [Self::Stable, Self::Beta, Self::Nightly];
 
 	#[cfg(test)]
 	pub(crate) fn to_str(self) -> &'static str {
 		match self {
-			Channel::Stable => "stable",
-			Channel::Beta => "beta",
-			Channel::Nightly => "nightly",
+			RustChannel::Stable => "stable",
+			RustChannel::Beta => "beta",
+			RustChannel::Nightly => "nightly",
 		}
 	}
 }
@@ -250,24 +286,24 @@ pub enum Mode {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Edition {
+pub enum RustEdition {
 	Rust2015,
 	Rust2018,
 	Rust2021,
 	Rust2024,
 }
 
-impl Edition {
+impl RustEdition {
 	#[cfg(test)]
 	pub(crate) const ALL: [Self; 4] =
 		[Self::Rust2015, Self::Rust2018, Self::Rust2021, Self::Rust2024];
 
 	pub(crate) fn to_str(self) -> &'static str {
 		match self {
-			Edition::Rust2015 => "2015",
-			Edition::Rust2018 => "2018",
-			Edition::Rust2021 => "2021",
-			Edition::Rust2024 => "2024",
+			RustEdition::Rust2015 => "2015",
+			RustEdition::Rust2018 => "2018",
+			RustEdition::Rust2021 => "2021",
+			RustEdition::Rust2024 => "2024",
 		}
 	}
 
@@ -336,9 +372,9 @@ pub enum LibraryType {
 
 #[derive(Debug, Clone)]
 pub struct ExecuteRequest {
-	pub channel: Channel,
+	pub channel: RustChannel,
 	pub mode: Mode,
-	pub edition: Edition,
+	pub edition: RustEdition,
 	pub crate_type: CrateType,
 	pub tests: bool,
 	pub backtrace: bool,
@@ -384,7 +420,7 @@ impl ExecuteRequest {
 
 impl CargoTomlModifier for ExecuteRequest {
 	fn modify_cargo_toml(&self, mut cargo_toml: toml::Value) -> toml::Value {
-		if self.edition == Edition::Rust2024 {
+		if self.edition == RustEdition::Rust2024 {
 			cargo_toml = modify_cargo_toml::set_feature_edition2024(cargo_toml);
 		}
 
@@ -419,13 +455,9 @@ pub struct ExecuteResponse {
 #[derive(Debug, Clone)]
 pub struct CompileRequest {
 	pub target: CompileTarget,
-	pub channel: Channel,
+	pub language: Language,
 	pub crate_type: CrateType,
 	pub mode: Mode,
-	pub edition: Edition,
-	// TODO: Remove `tests` and `backtrace` -- don't make sense for compiling.
-	pub tests: bool,
-	pub backtrace: bool,
 	pub code: String,
 }
 
@@ -451,9 +483,11 @@ impl CompileRequest {
 				args.extend(&["--", "--emit", "asm=compilation"]);
 
 				// Enable extra assembly comments for nightly builds
-				if let Channel::Nightly = self.channel {
-					args.push("-Z");
-					args.push("asm-comments");
+				if let Language::Rust(rust_spec) = self.language {
+					if rust_spec.channel == RustChannel::Nightly {
+						args.push("-Z");
+						args.push("asm-comments");
+					}
 				}
 
 				args.push("-C");
@@ -468,9 +502,6 @@ impl CompileRequest {
 			Wasm => args.extend(&["-o", output_path]),
 		}
 		let mut envs = HashMap::new();
-		if self.backtrace {
-			envs.insert("RUST_BACKTRACE".to_owned(), "1".to_owned());
-		}
 
 		ExecuteCommandRequest {
 			cmd: "cargo".to_owned(),
@@ -499,22 +530,26 @@ impl CompileRequest {
 
 impl CargoTomlModifier for CompileRequest {
 	fn modify_cargo_toml(&self, mut cargo_toml: toml::Value) -> toml::Value {
-		if self.edition == Edition::Rust2024 {
-			cargo_toml = modify_cargo_toml::set_feature_edition2024(cargo_toml);
+		if let Language::Rust(rust_spec) = self.language {
+			if rust_spec.edition == RustEdition::Rust2024 {
+				cargo_toml = modify_cargo_toml::set_feature_edition2024(cargo_toml);
+			}
+			cargo_toml =
+				modify_cargo_toml::set_edition(cargo_toml, rust_spec.edition.to_cargo_toml_key());
+
+			if let Some(crate_type) = self.crate_type.to_library_cargo_toml_key() {
+				cargo_toml = modify_cargo_toml::set_crate_type(cargo_toml, crate_type);
+			}
+
+			if CompileTarget::Wasm == self.target {
+				cargo_toml = modify_cargo_toml::remove_dependencies(cargo_toml);
+				cargo_toml = modify_cargo_toml::set_release_lto(cargo_toml, true);
+			}
+
+			cargo_toml
+		} else {
+			panic!("Invalid language: {:?}", self.language)
 		}
-
-		cargo_toml = modify_cargo_toml::set_edition(cargo_toml, self.edition.to_cargo_toml_key());
-
-		if let Some(crate_type) = self.crate_type.to_library_cargo_toml_key() {
-			cargo_toml = modify_cargo_toml::set_crate_type(cargo_toml, crate_type);
-		}
-
-		if CompileTarget::Wasm == self.target {
-			cargo_toml = modify_cargo_toml::remove_dependencies(cargo_toml);
-			cargo_toml = modify_cargo_toml::set_release_lto(cargo_toml, true);
-		}
-
-		cargo_toml
 	}
 }
 
@@ -541,9 +576,9 @@ pub struct CompileResponse {
 
 #[derive(Debug, Clone)]
 pub struct FormatRequest {
-	pub channel: Channel,
+	pub channel: RustChannel,
 	pub crate_type: CrateType,
-	pub edition: Edition,
+	pub edition: RustEdition,
 	pub code: String,
 }
 
@@ -568,7 +603,7 @@ impl FormatRequest {
 
 impl CargoTomlModifier for FormatRequest {
 	fn modify_cargo_toml(&self, mut cargo_toml: toml::Value) -> toml::Value {
-		if self.edition == Edition::Rust2024 {
+		if self.edition == RustEdition::Rust2024 {
 			cargo_toml = modify_cargo_toml::set_feature_edition2024(cargo_toml);
 		}
 
@@ -590,9 +625,9 @@ pub struct FormatResponse {
 
 #[derive(Debug, Clone)]
 pub struct ClippyRequest {
-	pub channel: Channel,
+	pub channel: RustChannel,
 	pub crate_type: CrateType,
-	pub edition: Edition,
+	pub edition: RustEdition,
 	pub code: String,
 }
 
@@ -617,7 +652,7 @@ impl ClippyRequest {
 
 impl CargoTomlModifier for ClippyRequest {
 	fn modify_cargo_toml(&self, mut cargo_toml: toml::Value) -> toml::Value {
-		if self.edition == Edition::Rust2024 {
+		if self.edition == RustEdition::Rust2024 {
 			cargo_toml = modify_cargo_toml::set_feature_edition2024(cargo_toml);
 		}
 
@@ -638,9 +673,9 @@ pub struct ClippyResponse {
 
 #[derive(Debug, Clone)]
 pub struct MiriRequest {
-	pub channel: Channel,
+	pub channel: RustChannel,
 	pub crate_type: CrateType,
-	pub edition: Edition,
+	pub edition: RustEdition,
 	pub code: String,
 }
 
@@ -665,7 +700,7 @@ impl MiriRequest {
 
 impl CargoTomlModifier for MiriRequest {
 	fn modify_cargo_toml(&self, mut cargo_toml: toml::Value) -> toml::Value {
-		if self.edition == Edition::Rust2024 {
+		if self.edition == RustEdition::Rust2024 {
 			cargo_toml = modify_cargo_toml::set_feature_edition2024(cargo_toml);
 		}
 
@@ -686,9 +721,9 @@ pub struct MiriResponse {
 
 #[derive(Debug, Clone)]
 pub struct MacroExpansionRequest {
-	pub channel: Channel,
+	pub channel: RustChannel,
 	pub crate_type: CrateType,
-	pub edition: Edition,
+	pub edition: RustEdition,
 	pub code: String,
 }
 
@@ -713,7 +748,7 @@ impl MacroExpansionRequest {
 
 impl CargoTomlModifier for MacroExpansionRequest {
 	fn modify_cargo_toml(&self, mut cargo_toml: toml::Value) -> toml::Value {
-		if self.edition == Edition::Rust2024 {
+		if self.edition == RustEdition::Rust2024 {
 			cargo_toml = modify_cargo_toml::set_feature_edition2024(cargo_toml);
 		}
 
@@ -833,7 +868,7 @@ where
 		use versions_error::*;
 
 		let [stable, beta, nightly] =
-			[Channel::Stable, Channel::Beta, Channel::Nightly].map(|c| async move {
+			[RustChannel::Stable, RustChannel::Beta, RustChannel::Nightly].map(|c| async move {
 				let c = self.select_channel(c).await?;
 				c.versions().await.map_err(VersionsChannelError::from)
 			});
@@ -848,7 +883,7 @@ where
 	}
 
 	pub async fn crates(&self) -> Result<Vec<Crate>, CratesError> {
-		self.select_channel(Channel::Stable).await?.crates().await.map_err(Into::into)
+		self.select_channel(RustChannel::Stable).await?.crates().await.map_err(Into::into)
 	}
 
 	pub async fn execute(
@@ -884,11 +919,19 @@ where
 	) -> Result<WithOutput<CompileResponse>, CompileError> {
 		use compile_error::*;
 
-		self.select_channel(request.channel)
-			.await
-			.context(CouldNotStartContainerSnafu)?
-			.compile(request)
-			.await
+		match request.language {
+			Language::Rust(rust_spec) => {
+				self.select_channel(rust_spec.channel)
+					.await
+					.context(CouldNotStartContainerSnafu)?
+					.compile(request)
+					.await
+			}
+			Language::Cpp(cpp_spec) => {
+				println!("Cannot yet compile C++!\n{cpp_spec:?}");
+				Err(CompileError::UnsupportedLanguage { language: request.language })
+			}
+		}
 	}
 
 	pub async fn begin_compile(
@@ -898,11 +941,19 @@ where
 	) -> Result<ActiveCompilation, CompileError> {
 		use compile_error::*;
 
-		self.select_channel(request.channel)
-			.await
-			.context(CouldNotStartContainerSnafu)?
-			.begin_compile(token, request)
-			.await
+		match request.language {
+			Language::Rust(rust_spec) => {
+				self.select_channel(rust_spec.channel)
+					.await
+					.context(CouldNotStartContainerSnafu)?
+					.begin_compile(token, request)
+					.await
+			}
+			Language::Cpp(cpp_spec) => {
+				println!("Cannot yet compile C++!\n{cpp_spec:?}");
+				Err(CompileError::UnsupportedLanguage { language: request.language })
+			}
+		}
 	}
 
 	pub async fn format(
@@ -1035,11 +1086,11 @@ where
 		Ok(self.backend)
 	}
 
-	async fn select_channel(&self, channel: Channel) -> Result<&Container, Error> {
+	async fn select_channel(&self, channel: RustChannel) -> Result<&Container, Error> {
 		let container = match channel {
-			Channel::Stable => &self.stable,
-			Channel::Beta => &self.beta,
-			Channel::Nightly => &self.nightly,
+			RustChannel::Stable => &self.stable,
+			RustChannel::Beta => &self.beta,
+			RustChannel::Nightly => &self.nightly,
 		};
 
 		container
@@ -1062,7 +1113,7 @@ struct Container {
 
 impl Container {
 	async fn new(
-		channel: Channel,
+		channel: RustChannel,
 		token: CancellationToken,
 		backend: &impl Backend,
 	) -> Result<Self> {
@@ -1690,6 +1741,9 @@ pub enum CompileError {
 
 	#[snafu(display("The compilation output was not UTF-8"))]
 	CodeNotUtf8 { source: std::string::FromUtf8Error },
+
+	#[snafu(display("Cannot compile requested language"))]
+	UnsupportedLanguage { language: Language },
 }
 
 pub struct ActiveFormatting {
@@ -2176,7 +2230,7 @@ pub enum CommanderError {
 pub trait Backend {
 	fn run_worker_in_background(
 		&self,
-		channel: Channel,
+		channel: RustChannel,
 	) -> Result<(Child, Option<Command>, ChildStdin, ChildStdout)> {
 		let (mut start, kill) = self.prepare_worker_command(channel);
 
@@ -2191,14 +2245,14 @@ pub trait Backend {
 		Ok((child, kill, stdin, stdout))
 	}
 
-	fn prepare_worker_command(&self, channel: Channel) -> (Command, Option<Command>);
+	fn prepare_worker_command(&self, channel: RustChannel) -> (Command, Option<Command>);
 }
 
 impl<B> Backend for &B
 where
 	B: Backend,
 {
-	fn prepare_worker_command(&self, channel: Channel) -> (Command, Option<Command>) {
+	fn prepare_worker_command(&self, channel: RustChannel) -> (Command, Option<Command>) {
 		B::prepare_worker_command(self, channel)
 	}
 }
@@ -2269,7 +2323,7 @@ impl DockerBackend {
 }
 
 impl Backend for DockerBackend {
-	fn prepare_worker_command(&self, channel: Channel) -> (Command, Option<Command>) {
+	fn prepare_worker_command(&self, channel: RustChannel) -> (Command, Option<Command>) {
 		let name = self.next_name();
 
 		let mut command = basic_secure_docker_command();
@@ -2290,12 +2344,12 @@ impl Backend for DockerBackend {
 	}
 }
 
-impl Channel {
+impl RustChannel {
 	fn to_container_name(self) -> &'static str {
 		match self {
-			Channel::Stable => "rust-stable",
-			Channel::Beta => "rust-beta",
-			Channel::Nightly => "rust-nightly",
+			RustChannel::Stable => "rust-stable",
+			RustChannel::Beta => "rust-beta",
+			RustChannel::Nightly => "rust-nightly",
 		}
 	}
 }
@@ -2465,7 +2519,7 @@ mod tests {
 			let project_dir =
 				TempDir::new("playground").expect("Failed to create temporary project directory");
 
-			for channel in Channel::ALL {
+			for channel in RustChannel::ALL {
 				let channel = channel.to_str();
 				let channel_dir = project_dir.path().join(channel);
 
@@ -2487,7 +2541,7 @@ mod tests {
 	}
 
 	impl Backend for TestBackend {
-		fn prepare_worker_command(&self, channel: Channel) -> (Command, Option<Command>) {
+		fn prepare_worker_command(&self, channel: RustChannel) -> (Command, Option<Command>) {
 			let channel_dir = self.project_dir.path().join(channel.to_str());
 
 			let mut command = Command::new("./target/debug/worker");
@@ -2575,9 +2629,9 @@ mod tests {
 	}
 
 	const ARBITRARY_EXECUTE_REQUEST: ExecuteRequest = ExecuteRequest {
-		channel: Channel::Stable,
+		channel: RustChannel::Stable,
 		mode: Mode::Debug,
-		edition: Edition::Rust2021,
+		edition: RustEdition::Rust2021,
 		crate_type: CrateType::Binary,
 		tests: false,
 		backtrace: false,
@@ -2647,7 +2701,7 @@ mod tests {
 		];
 
 		let tests = params.into_iter().flat_map(|(code, works_in)| {
-			Edition::ALL.into_iter().zip(works_in).map(
+			RustEdition::ALL.into_iter().zip(works_in).map(
 				move |(edition, expected_to_work)| async move {
 					let coordinator = new_coordinator().await;
 
@@ -2655,7 +2709,7 @@ mod tests {
 						code: code.into(),
 						edition,
 						crate_type: CrateType::Library(LibraryType::Lib),
-						channel: Channel::Nightly, // To allow 2024 while it is unstable
+						channel: RustChannel::Nightly, // To allow 2024 while it is unstable
 						..ARBITRARY_EXECUTE_REQUEST
 					};
 					let response = coordinator.execute(request).await.unwrap();
@@ -2937,10 +2991,10 @@ mod tests {
 
 	const ARBITRARY_COMPILE_REQUEST: CompileRequest = CompileRequest {
 		target: CompileTarget::Mir,
-		channel: Channel::Stable,
+		channel: RustChannel::Stable,
 		crate_type: CrateType::Binary,
 		mode: Mode::Release,
-		edition: Edition::Rust2021,
+		edition: RustEdition::Rust2021,
 		tests: false,
 		backtrace: false,
 		code: String::new(),
@@ -2990,13 +3044,13 @@ mod tests {
 	#[tokio::test]
 	#[snafu::report]
 	async fn compile_edition() -> Result<()> {
-		for edition in Edition::ALL {
+		for edition in RustEdition::ALL {
 			let coordinator = new_coordinator().await;
 
 			let req = CompileRequest {
 				edition,
 				code: SUBTRACT_CODE.into(),
-				channel: Channel::Nightly, // To allow 2024 while it is unstable
+				channel: RustChannel::Nightly, // To allow 2024 while it is unstable
 				..ARBITRARY_HIR_REQUEST
 			};
 
@@ -3021,10 +3075,10 @@ mod tests {
 			DEFAULT_ASSEMBLY_DEMANGLE,
 			DEFAULT_ASSEMBLY_PROCESS,
 		),
-		channel: Channel::Beta,
+		channel: RustChannel::Beta,
 		crate_type: CrateType::Library(LibraryType::Lib),
 		mode: Mode::Release,
-		edition: Edition::Rust2018,
+		edition: RustEdition::Rust2018,
 		tests: false,
 		backtrace: false,
 		code: String::new(),
@@ -3161,10 +3215,10 @@ mod tests {
 
 	const ARBITRARY_HIR_REQUEST: CompileRequest = CompileRequest {
 		target: CompileTarget::Hir,
-		channel: Channel::Nightly,
+		channel: RustChannel::Nightly,
 		crate_type: CrateType::Library(LibraryType::Lib),
 		mode: Mode::Release,
-		edition: Edition::Rust2021,
+		edition: RustEdition::Rust2021,
 		tests: false,
 		backtrace: false,
 		code: String::new(),
@@ -3194,10 +3248,10 @@ mod tests {
 
 		let req = CompileRequest {
 			target: CompileTarget::LlvmIr,
-			channel: Channel::Stable,
+			channel: RustChannel::Stable,
 			crate_type: CrateType::Library(LibraryType::Lib),
 			mode: Mode::Debug,
-			edition: Edition::Rust2015,
+			edition: RustEdition::Rust2015,
 			tests: false,
 			backtrace: false,
 			code: r#"pub fn mul(a: u8, b: u8) -> u8 { a * b }"#.into(),
@@ -3221,10 +3275,10 @@ mod tests {
 
 		let req = CompileRequest {
 			target: CompileTarget::Wasm,
-			channel: Channel::Nightly,
+			channel: RustChannel::Nightly,
 			crate_type: CrateType::Library(LibraryType::Cdylib),
 			mode: Mode::Release,
-			edition: Edition::Rust2021,
+			edition: RustEdition::Rust2021,
 			tests: false,
 			backtrace: false,
 			code: r#"#[export_name = "inc"] pub fn inc(a: u8) -> u8 { a + 1 }"#.into(),
@@ -3241,9 +3295,9 @@ mod tests {
 	}
 
 	const ARBITRARY_FORMAT_REQUEST: FormatRequest = FormatRequest {
-		channel: Channel::Stable,
+		channel: RustChannel::Stable,
 		crate_type: CrateType::Binary,
-		edition: Edition::Rust2015,
+		edition: RustEdition::Rust2015,
 		code: String::new(),
 	};
 
@@ -3276,7 +3330,7 @@ mod tests {
 	#[tokio::test]
 	#[snafu::report]
 	async fn format_channel() -> Result<()> {
-		for channel in Channel::ALL {
+		for channel in RustChannel::ALL {
 			let coordinator = new_coordinator().await;
 
 			let req = FormatRequest {
@@ -3308,11 +3362,11 @@ mod tests {
 		for (code, works_in) in cases {
 			let coordinator = new_coordinator().await;
 
-			for (edition, works) in Edition::ALL.into_iter().zip(works_in) {
+			for (edition, works) in RustEdition::ALL.into_iter().zip(works_in) {
 				let req = FormatRequest {
 					edition,
 					code: code.into(),
-					channel: Channel::Nightly, // To allow 2024 while it is unstable
+					channel: RustChannel::Nightly, // To allow 2024 while it is unstable
 					..ARBITRARY_FORMAT_REQUEST
 				};
 
@@ -3326,9 +3380,9 @@ mod tests {
 	}
 
 	const ARBITRARY_CLIPPY_REQUEST: ClippyRequest = ClippyRequest {
-		channel: Channel::Stable,
+		channel: RustChannel::Stable,
 		crate_type: CrateType::Library(LibraryType::Rlib),
-		edition: Edition::Rust2021,
+		edition: RustEdition::Rust2021,
 		code: String::new(),
 	};
 
@@ -3369,7 +3423,7 @@ mod tests {
 		)];
 
 		let tests = cases.into_iter().flat_map(|(code, expected_to_be_clean)| {
-			Edition::ALL.into_iter().zip(expected_to_be_clean).map(
+			RustEdition::ALL.into_iter().zip(expected_to_be_clean).map(
 				move |(edition, expected_to_be_clean)| async move {
 					let coordinator = new_coordinator().await;
 
@@ -3397,9 +3451,9 @@ mod tests {
 	}
 
 	const ARBITRARY_MIRI_REQUEST: MiriRequest = MiriRequest {
-		channel: Channel::Nightly,
+		channel: RustChannel::Nightly,
 		crate_type: CrateType::Binary,
-		edition: Edition::Rust2021,
+		edition: RustEdition::Rust2021,
 		code: String::new(),
 	};
 
@@ -3436,9 +3490,9 @@ mod tests {
 	}
 
 	const ARBITRARY_MACRO_EXPANSION_REQUEST: MacroExpansionRequest = MacroExpansionRequest {
-		channel: Channel::Nightly,
+		channel: RustChannel::Nightly,
 		crate_type: CrateType::Library(LibraryType::Cdylib),
-		edition: Edition::Rust2018,
+		edition: RustEdition::Rust2018,
 		code: String::new(),
 	};
 
@@ -3479,10 +3533,10 @@ mod tests {
 
 		// Create a main.rs file
 		let req = ExecuteRequest {
-			channel: Channel::Stable,
+			channel: RustChannel::Stable,
 			crate_type: CrateType::Binary,
 			mode: Mode::Debug,
-			edition: Edition::Rust2021,
+			edition: RustEdition::Rust2021,
 			tests: false,
 			backtrace: false,
 			code: "pub fn alpha() {}".into(),
@@ -3521,9 +3575,9 @@ mod tests {
 		let mut coordinator = new_coordinator().await;
 
 		let req = ExecuteRequest {
-			channel: Channel::Stable,
+			channel: RustChannel::Stable,
 			mode: Mode::Debug,
-			edition: Edition::Rust2021,
+			edition: RustEdition::Rust2021,
 			crate_type: CrateType::Binary,
 			tests: false,
 			backtrace: false,
@@ -3549,9 +3603,9 @@ mod tests {
 		let coordinator = new_coordinator().await;
 
 		let req = ExecuteRequest {
-			channel: Channel::Stable,
+			channel: RustChannel::Stable,
 			mode: Mode::Release,
-			edition: Edition::Rust2021,
+			edition: RustEdition::Rust2021,
 			crate_type: CrateType::Binary,
 			tests: false,
 			backtrace: false,
@@ -3570,9 +3624,9 @@ mod tests {
 
 	fn new_execution_limited_request() -> ExecuteRequest {
 		ExecuteRequest {
-			channel: Channel::Stable,
+			channel: RustChannel::Stable,
 			mode: Mode::Debug,
-			edition: Edition::Rust2021,
+			edition: RustEdition::Rust2021,
 			crate_type: CrateType::Binary,
 			tests: false,
 			backtrace: false,

@@ -7,3 +7,7 @@ wasm-pack.log
 target/
 /pkg/
 *.exe
+
+node_modules/
+.npm
+.env

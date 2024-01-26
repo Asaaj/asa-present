@@ -6,9 +6,11 @@ use async_mutex::Mutex;
 use coordinator_manager::CoordinatorManager;
 use orchestrator::coordinator;
 use orchestrator::coordinator::{CompileResponse, CompiledCode, WithOutput};
+use rocket::fairing::{Fairing, Info, Kind};
 use rocket::futures::TryFutureExt;
+use rocket::http::Header;
 use rocket::serde::json::Json;
-use rocket::State;
+use rocket::{Request, Response, State};
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinError;
 
@@ -17,9 +19,31 @@ use crate::error::*;
 mod coordinator_manager;
 mod error;
 
+#[derive(Copy, Clone, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ProgrammingLanguage {
+	Rust,
+	Cpp,
+}
+impl From<ProgrammingLanguage> for coordinator::Language {
+	fn from(value: ProgrammingLanguage) -> Self {
+		match value {
+			ProgrammingLanguage::Rust => coordinator::RustSpec::new(
+				coordinator::RustChannel::Stable,
+				coordinator::RustEdition::Rust2021,
+			)
+			.into(),
+			ProgrammingLanguage::Cpp => {
+				coordinator::CppSpec::new(coordinator::CppVersion::Cpp20).into()
+			}
+		}
+	}
+}
+
 #[derive(Clone, Debug, Deserialize)]
 struct CompileCodeRequest {
 	source_code: String,
+	language: ProgrammingLanguage,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -67,12 +91,9 @@ async fn do_compile(
 ) -> Result<(), Error> {
 	let req = coordinator::CompileRequest {
 		target: coordinator::CompileTarget::Wasm,
-		channel: coordinator::Channel::Stable,
+		language: req.language.into(),
 		crate_type: coordinator::CrateType::Library(coordinator::LibraryType::Cdylib),
 		mode: coordinator::Mode::Release,
-		edition: coordinator::Edition::Rust2021,
-		tests: false,
-		backtrace: true,
 		code: req.source_code.to_string(),
 	};
 
@@ -178,9 +199,25 @@ async fn compile_code(
 	response
 }
 
+pub struct CORS;
+
+#[rocket::async_trait]
+impl Fairing for CORS {
+	fn info(&self) -> Info { Info { name: "Add CORS headers to responses", kind: Kind::Response } }
+
+	async fn on_response<'r>(&self, _request: &'r Request<'_>, response: &mut Response<'r>) {
+		response.set_header(Header::new("Access-Control-Allow-Origin", "*"));
+		response
+			.set_header(Header::new("Access-Control-Allow-Methods", "POST, GET, PATCH, OPTIONS"));
+		response.set_header(Header::new("Access-Control-Allow-Headers", "*"));
+		response.set_header(Header::new("Access-Control-Allow-Credentials", "true"));
+	}
+}
+
 #[launch]
 async fn rocket() -> _ {
 	rocket::build()
 		.manage(Mutex::new(CoordinatorManager::new().await))
+		.attach(CORS)
 		.mount("/", routes![compile_code])
 }
