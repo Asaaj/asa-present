@@ -1,8 +1,11 @@
 #[macro_use]
 extern crate rocket;
 
+use std::{fs, io};
 use async_channel::{unbounded, Receiver, Sender};
 use async_mutex::Mutex;
+use std::io::prelude::*;
+use std::path::{Path, PathBuf};
 use coordinator_manager::CoordinatorManager;
 use orchestrator::coordinator;
 use orchestrator::coordinator::{CompileResponse, CompiledCode, WithOutput};
@@ -12,6 +15,7 @@ use rocket::http::Header;
 use rocket::serde::json::Json;
 use rocket::{Request, Response, State};
 use serde::{Deserialize, Serialize};
+use tar::Archive;
 use tokio::task::JoinError;
 
 use crate::error::*;
@@ -43,12 +47,20 @@ impl From<ProgrammingLanguage> for coordinator::Language {
 #[derive(Clone, Debug, Deserialize)]
 struct CompileCodeRequest {
 	source_code: String,
+	package_name: String,
 	language: ProgrammingLanguage,
 }
 
 #[derive(Clone, Debug, Serialize)]
 struct CompileSuccess {
 	result: Vec<u8>,
+	stdout: String,
+	stderr: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct TextResponseSuccess {
+	result: String,
 	stdout: String,
 	stderr: String,
 }
@@ -74,6 +86,9 @@ enum CompileCodeResponse {
 	#[response(status = 200)]
 	Success(JsonResponse<CompileSuccess>),
 
+	#[response(status = 200)]
+	TextSuccess(JsonResponse<TextResponseSuccess>),
+
 	#[response(status = 400)]
 	CompileError(JsonResponse<CompileFailed>),
 
@@ -89,12 +104,14 @@ async fn do_compile(
 	req: CompileCodeRequest,
 	sender: Sender<CompileCodeResponse>,
 ) -> Result<(), Error> {
+	let package_name = req.package_name.clone();
 	let req = coordinator::CompileRequest {
 		target: coordinator::CompileTarget::Wasm,
 		language: req.language.into(),
 		crate_type: coordinator::CrateType::Library(coordinator::LibraryType::Cdylib),
 		mode: coordinator::Mode::Release,
 		code: req.source_code.to_string(),
+		package_name: req.package_name,
 	};
 
 	let with_output_res = shared_coordinator.compile(req).await;
@@ -115,12 +132,26 @@ async fn do_compile(
 					stderr,
 				} => {
 					if let CompiledCode::CodeBin(result) = code {
-						CompileCodeResponse::Success(
-							CompileSuccess { result, stdout, stderr }.into(),
+						let output_location = format!("./pkg/{}", package_name);
+						let output_location = Path::new(output_location.as_str());
+
+						let _ = fs::remove_dir_all(output_location);
+
+						if let Ok(_) = try_unarchiving(&result, output_location.into()) {
+							CompileCodeResponse::TextSuccess(TextResponseSuccess{result: "Yay".into(), stdout, stderr}.into())
+							// CompileCodeResponse::TextSuccess(text_response.into())
+						} else {
+							CompileCodeResponse::Success(
+								CompileSuccess { result, stdout, stderr }.into(),
+							)
+						}
+					} else if let CompiledCode::CodeStr(result) = code {
+						CompileCodeResponse::TextSuccess(
+							TextResponseSuccess { result, stdout, stderr }.into(),
 						)
 					} else {
 						CompileCodeResponse::InternalError(format!(
-							"Received string instead of binary after compile: {code:?}"
+							"Received unknown data type after compile: {code:?}"
 						))
 					}
 				} /* other => {
@@ -139,6 +170,19 @@ async fn do_compile(
 		.map_err(|err| ResultChannelFailedSnafu { text: format!("{err}") }.build())?;
 
 	Ok(())
+}
+
+fn try_unarchiving(result: &[u8], output_location: PathBuf) -> io::Result<()> {
+	let mut archive = Archive::new(result);
+	archive.unpack(output_location)
+
+	// if let Ok(_) = archive.unpack(output_location) {
+	// 	println!("Unzipped response into {output_location:?}");
+	// 	Some(TextResponseSuccess{ result: s, stdout: "".into(), stderr: "".into()})
+	// } else {
+	// 	println!("Failed to unzip response");
+	// 	None
+	// }
 }
 
 fn handle_task_panic(task: Result<Result<(), Error>, JoinError>) -> Result<(), Error> {
@@ -196,6 +240,7 @@ async fn compile_code(
 			CompileCodeResponse::InternalError("No compile task to await! Not sure how...".into())
 		}
 	};
+	// println!("Response: {response:?}");
 	response
 }
 

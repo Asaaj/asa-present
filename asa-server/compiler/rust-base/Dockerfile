@@ -50,6 +50,10 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- \
     --component rust-src
 RUN if [ "${channel}" = 'nightly' ]; then rustup component add miri; fi
 
+RUN curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+RUN cargo install -f wasm-bindgen-cli
+#--version $(wasm-pack --version | sed 's/wasm-pack //g')
+
 COPY --chown=playground entrypoint.sh /playground/tools/
 
 # Build wasm-tools
@@ -123,3 +127,5 @@ COPY --chown=playground cargo-wasm /playground/.cargo/bin
 COPY --chown=playground cargo-miri-playground /playground/.cargo/bin
 
 ENTRYPOINT ["/playground/tools/entrypoint.sh"]
+
+CMD wasm-pack init

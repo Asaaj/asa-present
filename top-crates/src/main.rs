@@ -51,8 +51,9 @@ struct Profiles {
 }
 
 fn main() {
-	let d = fs::read_to_string("crate-modifications.toml")
-		.expect("unable to read crate modifications file");
+	let d = include_str!("../crate-modifications.toml");
+	// let d = fs::read_to_string("crate-modifications.toml")
+	// 	.expect("unable to read crate modifications file");
 
 	let modifications: Modifications =
 		toml::from_str(&d).expect("unable to parse crate modifications file");
@@ -85,7 +86,7 @@ fn main() {
 
 	// Write manifest file.
 	let base_directory: PathBuf =
-		std::env::args_os().nth(1).unwrap_or_else(|| "../compiler/rust-base".into()).into();
+		std::env::args_os().nth(1).unwrap_or_else(|| "../asa-server/compiler/rust-base".into()).into();
 
 	let cargo_toml = base_directory.join("Cargo.toml");
 	write_manifest(manifest, &cargo_toml);

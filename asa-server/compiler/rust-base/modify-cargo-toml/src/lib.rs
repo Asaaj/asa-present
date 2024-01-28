@@ -67,6 +67,30 @@ pub fn set_edition(cargo_toml: Value, edition: &str) -> Value {
 	})
 }
 
+pub fn set_name(cargo_toml: Value, name: &str) -> Value {
+	#[derive(Debug, Serialize, Deserialize)]
+	#[serde(rename_all = "kebab-case")]
+	struct CargoToml {
+		package: Package,
+		#[serde(flatten)]
+		other: Other,
+	}
+
+	#[derive(Debug, Serialize, Deserialize)]
+	#[serde(rename_all = "kebab-case")]
+	struct Package {
+		#[serde(default)]
+		name: String,
+		#[serde(flatten)]
+		other: Other,
+	}
+
+	modify(cargo_toml, |mut cargo_toml: CargoToml| {
+		cargo_toml.package.name = name.into();
+		cargo_toml
+	})
+}
+
 pub fn remove_dependencies(cargo_toml: Value) -> Value {
 	#[derive(Debug, Serialize, Deserialize)]
 	#[serde(rename_all = "kebab-case")]

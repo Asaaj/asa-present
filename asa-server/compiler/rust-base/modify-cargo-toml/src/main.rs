@@ -30,9 +30,9 @@ fn main() {
 		cargo_toml = set_edition(cargo_toml, &edition);
 	}
 
-	if env::var_os("PLAYGROUND_NO_DEPENDENCIES").is_some() {
-		cargo_toml = remove_dependencies(cargo_toml);
-	}
+	// if env::var_os("PLAYGROUND_NO_DEPENDENCIES").is_some() {
+	// 	cargo_toml = remove_dependencies(cargo_toml);
+	// }
 
 	if let Ok(crate_type) = env::var("PLAYGROUND_CRATE_TYPE") {
 		cargo_toml = set_crate_type(cargo_toml, &crate_type);

@@ -5,7 +5,6 @@ members = [
 ]
 default-members = [
     "asa-server",
-    "top-crates",
 ]
 resolver = "2"
 

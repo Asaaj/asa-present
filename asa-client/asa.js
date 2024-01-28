@@ -31,18 +31,22 @@ function make_editor(element) {
     });
 }
 
-async function compile(button) {
+async function compile(button, editor_id) {
     button.disabled = true;
     try {
-        const code = window.demo_code.getValue();
-        resp = await fetch("http://127.0.0.1:8000/compile", {
+        const code = window[editor_id].getValue();
+        const response = await fetch("http://127.0.0.1:8000/compile", {
             method: "POST",
             body: JSON.stringify({
                 source_code: code,
-                language: "rust"
+                package_name: editor_id,
+                language: "rust",
             })
         });
-        console.log(await resp.json());
+
+        const response_json = await response.json();
+        console.log(response_json);
+
     } finally {
         button.disabled = false;
     }

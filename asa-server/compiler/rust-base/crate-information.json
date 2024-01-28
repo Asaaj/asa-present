@@ -31,7 +31,7 @@
   },
   {
     "name": "anstream",
-    "version": "0.6.7",
+    "version": "0.6.11",
     "id": "anstream"
   },
   {
@@ -116,7 +116,7 @@
   },
   {
     "name": "bitflags",
-    "version": "2.4.1",
+    "version": "2.4.2",
     "id": "bitflags"
   },
   {
@@ -130,8 +130,13 @@
     "id": "block_buffer"
   },
   {
+    "name": "bumpalo",
+    "version": "3.14.0",
+    "id": "bumpalo"
+  },
+  {
     "name": "bytemuck",
-    "version": "1.14.0",
+    "version": "1.14.1",
     "id": "bytemuck"
   },
   {
@@ -166,17 +171,17 @@
   },
   {
     "name": "chrono",
-    "version": "0.4.31",
+    "version": "0.4.33",
     "id": "chrono"
   },
   {
     "name": "clap",
-    "version": "4.4.16",
+    "version": "4.4.18",
     "id": "clap"
   },
   {
     "name": "clap_builder",
-    "version": "4.4.16",
+    "version": "4.4.18",
     "id": "clap_builder"
   },
   {
@@ -310,8 +315,13 @@
     "id": "encoding_rs"
   },
   {
+    "name": "env_filter",
+    "version": "0.1.0",
+    "id": "env_filter"
+  },
+  {
     "name": "env_logger",
-    "version": "0.10.1",
+    "version": "0.11.1",
     "id": "env_logger"
   },
   {
@@ -366,7 +376,7 @@
   },
   {
     "name": "fdeflate",
-    "version": "0.3.3",
+    "version": "0.3.4",
     "id": "fdeflate"
   },
   {
@@ -501,13 +511,13 @@
   },
   {
     "name": "h2",
-    "version": "0.4.1",
+    "version": "0.4.2",
     "id": "h2"
   },
   {
     "name": "h2",
-    "version": "0.3.23",
-    "id": "h2_0_3_23"
+    "version": "0.3.24",
+    "id": "h2_0_3_24"
   },
   {
     "name": "half",
@@ -616,12 +626,12 @@
   },
   {
     "name": "image",
-    "version": "0.24.7",
+    "version": "0.24.8",
     "id": "image"
   },
   {
     "name": "indexmap",
-    "version": "2.1.0",
+    "version": "2.2.0",
     "id": "indexmap"
   },
   {
@@ -640,11 +650,6 @@
     "id": "ipnet"
   },
   {
-    "name": "is-terminal",
-    "version": "0.4.10",
-    "id": "is_terminal"
-  },
-  {
     "name": "itertools",
     "version": "0.12.0",
     "id": "itertools"
@@ -656,7 +661,7 @@
   },
   {
     "name": "jpeg-decoder",
-    "version": "0.3.0",
+    "version": "0.3.1",
     "id": "jpeg_decoder"
   },
   {
@@ -691,7 +696,7 @@
   },
   {
     "name": "linux-raw-sys",
-    "version": "0.4.12",
+    "version": "0.4.13",
     "id": "linux_raw_sys"
   },
   {
@@ -861,7 +866,7 @@
   },
   {
     "name": "openssl",
-    "version": "0.10.62",
+    "version": "0.10.63",
     "id": "openssl"
   },
   {
@@ -876,7 +881,7 @@
   },
   {
     "name": "openssl-sys",
-    "version": "0.9.98",
+    "version": "0.9.99",
     "id": "openssl_sys"
   },
   {
@@ -961,12 +966,12 @@
   },
   {
     "name": "pkg-config",
-    "version": "0.3.28",
+    "version": "0.3.29",
     "id": "pkg_config"
   },
   {
     "name": "png",
-    "version": "0.17.10",
+    "version": "0.17.11",
     "id": "png"
   },
   {
@@ -1001,7 +1006,7 @@
   },
   {
     "name": "proc-macro2",
-    "version": "1.0.76",
+    "version": "1.0.78",
     "id": "proc_macro2"
   },
   {
@@ -1051,22 +1056,22 @@
   },
   {
     "name": "rayon",
-    "version": "1.8.0",
+    "version": "1.8.1",
     "id": "rayon"
   },
   {
     "name": "rayon-core",
-    "version": "1.12.0",
+    "version": "1.12.1",
     "id": "rayon_core"
   },
   {
     "name": "regex",
-    "version": "1.10.2",
+    "version": "1.10.3",
     "id": "regex"
   },
   {
     "name": "regex-automata",
-    "version": "0.4.3",
+    "version": "0.4.5",
     "id": "regex_automata"
   },
   {
@@ -1101,7 +1106,7 @@
   },
   {
     "name": "rustix",
-    "version": "0.38.28",
+    "version": "0.38.30",
     "id": "rustix"
   },
   {
@@ -1136,17 +1141,17 @@
   },
   {
     "name": "serde",
-    "version": "1.0.195",
+    "version": "1.0.196",
     "id": "serde"
   },
   {
     "name": "serde_derive",
-    "version": "1.0.195",
+    "version": "1.0.196",
     "id": "serde_derive"
   },
   {
     "name": "serde_json",
-    "version": "1.0.111",
+    "version": "1.0.112",
     "id": "serde_json"
   },
   {
@@ -1206,7 +1211,7 @@
   },
   {
     "name": "smallvec",
-    "version": "1.11.2",
+    "version": "1.13.1",
     "id": "smallvec"
   },
   {
@@ -1316,7 +1321,7 @@
   },
   {
     "name": "tiff",
-    "version": "0.9.0",
+    "version": "0.9.1",
     "id": "tiff"
   },
   {
@@ -1431,7 +1436,7 @@
   },
   {
     "name": "unicode-bidi",
-    "version": "0.3.14",
+    "version": "0.3.15",
     "id": "unicode_bidi"
   },
   {
@@ -1491,7 +1496,7 @@
   },
   {
     "name": "uuid",
-    "version": "1.6.1",
+    "version": "1.7.0",
     "id": "uuid"
   },
   {
@@ -1515,8 +1520,33 @@
     "id": "want"
   },
   {
+    "name": "wasm-bindgen",
+    "version": "0.2.90",
+    "id": "wasm_bindgen"
+  },
+  {
+    "name": "wasm-bindgen-backend",
+    "version": "0.2.90",
+    "id": "wasm_bindgen_backend"
+  },
+  {
+    "name": "wasm-bindgen-macro",
+    "version": "0.2.90",
+    "id": "wasm_bindgen_macro"
+  },
+  {
+    "name": "wasm-bindgen-macro-support",
+    "version": "0.2.90",
+    "id": "wasm_bindgen_macro_support"
+  },
+  {
+    "name": "wasm-bindgen-shared",
+    "version": "0.2.90",
+    "id": "wasm_bindgen_shared"
+  },
+  {
     "name": "weezl",
-    "version": "0.1.7",
+    "version": "0.1.8",
     "id": "weezl"
   },
   {
@@ -1526,17 +1556,17 @@
   },
   {
     "name": "wide",
-    "version": "0.7.13",
+    "version": "0.7.14",
     "id": "wide"
   },
   {
     "name": "winnow",
-    "version": "0.5.34",
+    "version": "0.5.35",
     "id": "winnow"
   },
   {
     "name": "xattr",
-    "version": "1.2.0",
+    "version": "1.3.1",
     "id": "xattr"
   },
   {

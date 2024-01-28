@@ -459,6 +459,7 @@ pub struct CompileRequest {
 	pub crate_type: CrateType,
 	pub mode: Mode,
 	pub code: String,
+	pub package_name: String,
 }
 
 impl CompileRequest {
@@ -501,7 +502,7 @@ impl CompileRequest {
 			Hir => args.extend(&["--", "-Zunpretty=hir", "-o", output_path]),
 			Wasm => args.extend(&["-o", output_path]),
 		}
-		let mut envs = HashMap::new();
+		let envs = HashMap::new();
 
 		ExecuteCommandRequest {
 			cmd: "cargo".to_owned(),
@@ -541,8 +542,9 @@ impl CargoTomlModifier for CompileRequest {
 				cargo_toml = modify_cargo_toml::set_crate_type(cargo_toml, crate_type);
 			}
 
+			cargo_toml = modify_cargo_toml::set_name(cargo_toml, self.package_name.as_str());
+
 			if CompileTarget::Wasm == self.target {
-				cargo_toml = modify_cargo_toml::remove_dependencies(cargo_toml);
 				cargo_toml = modify_cargo_toml::set_release_lto(cargo_toml, true);
 			}
 

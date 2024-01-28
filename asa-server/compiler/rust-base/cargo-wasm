@@ -28,9 +28,17 @@ echo "${args[@]}" >> log
 
 # Perform our build
 # https://stackoverflow.com/a/7577209/155423
-cargo "build" "--target=wasm32-unknown-unknown" ${args[@]+"${args[@]}"}
+#cargo "build" "--target=wasm32-unknown-unknown" ${args[@]+"${args[@]}"}
 
-for wasm in $(find target/ -name '*wasm' -not -path '*/deps/*'); do
-    echo "found ${wasm}" >> "${log}"
-    cp "${wasm}" "${output}"
-done
+#for wasm in $(find target/ -name '*wasm' -not -path '*/deps/*'); do
+#    echo "found ${wasm}" >> "${log}"
+#    cp "${wasm}" "${output}"
+#
+#    # Convert to textual format, demangling as we go
+##    wasm-tools demangle "${wasm}" -t -o "${output}.wat"
+##    cp "${output}.wat" "${output}"
+#done
+
+wasm-pack "build" "--target=web"  "--mode" "no-install" ${args[@]+"${args[@]}"} "--" "--offline"
+rm "pkg/.gitignore"
+tar -cvf "${output}" "-C" "pkg/" "."

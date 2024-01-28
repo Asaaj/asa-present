@@ -13,11 +13,19 @@
     <div id="demo_code"
          class="demo"
          style="width: 800px; height: 600px; border: 1px solid grey">
-        fn x() {
-            println!("Hello world!");
+        use wasm_bindgen::prelude::*;
+
+        #[wasm_bindgen]
+        extern {
+            pub fn alert(s: &str);
+        }
+
+        #[wasm_bindgen]
+        pub fn greet(name: &str) {
+            alert(&format!("Hello, {}!", name));
         }
     </div>
-    <button onclick="compile(this)">Compile</button>
+    <button onclick="compile(this, 'demo_code')">Compile</button>
 
     <script>
         var require = {paths: {vs: './node_modules/monaco-editor/min/vs'}};

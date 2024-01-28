@@ -6,4 +6,5 @@ additions = [
     "async-trait",
     "async-recursion",
     "exmex",
+    "wasm-bindgen",
 ]
