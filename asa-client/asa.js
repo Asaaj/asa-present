@@ -31,11 +31,14 @@ function make_editor(element) {
     });
 }
 
+let DOWNLOAD_INDEX = 0;
+
 async function compile(button, editor_id) {
     button.disabled = true;
     try {
         const code = window[editor_id].getValue();
         const response = await fetch("http://127.0.0.1:8000/compile", {
+            cache: "no-store",
             method: "POST",
             body: JSON.stringify({
                 source_code: code,
@@ -46,10 +49,32 @@ async function compile(button, editor_id) {
 
         const response_json = await response.json();
         console.log(response_json);
-
+        if (response_json["exit_detail"]) {
+            console.log("Error!");
+            console.log("stdout = ", response_json["stdout"]);
+            console.log("stderr = ", response_json["stderr"]);
+        } else {
+            // Use a unique URL so module caching isn't a problem.
+            // Note: apparently leaves the old module loaded. Memory leak
+            const download_url = "/" + response_json.result + "?num=" + DOWNLOAD_INDEX;
+            let module = await import(download_url);
+            DOWNLOAD_INDEX += 1;
+            await module.default();
+            return module;
+        }
     } finally {
         button.disabled = false;
     }
+    return null;
+}
+
+async function compile_and_run(button, editor_id) {
+    const wasm = await compile(button, editor_id);
+
+    const run_editor_id = editor_id + "_run";
+    const code = window[run_editor_id].getValue();
+    console.log(code)
+    eval(code)(wasm)
 }
 
 function insert_all_editors(class_name) {

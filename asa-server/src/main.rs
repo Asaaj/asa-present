@@ -1,15 +1,19 @@
 #[macro_use]
 extern crate rocket;
 
-use std::{fs, io};
-use async_channel::{unbounded, Receiver, Sender};
-use async_mutex::Mutex;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{fs, io};
+
+use async_channel::{unbounded, Receiver, Sender};
+use async_mutex::Mutex;
 use coordinator_manager::CoordinatorManager;
+use glob::glob;
 use orchestrator::coordinator;
 use orchestrator::coordinator::{CompileResponse, CompiledCode, WithOutput};
 use rocket::fairing::{Fairing, Info, Kind};
+use rocket::fs::{relative, FileServer, Options};
 use rocket::futures::TryFutureExt;
 use rocket::http::Header;
 use rocket::serde::json::Json;
@@ -103,6 +107,7 @@ async fn do_compile(
 	shared_coordinator: coordinator_manager::SharedCoordinator,
 	req: CompileCodeRequest,
 	sender: Sender<CompileCodeResponse>,
+	request_index: usize,
 ) -> Result<(), Error> {
 	let package_name = req.package_name.clone();
 	let req = coordinator::CompileRequest {
@@ -130,33 +135,9 @@ async fn do_compile(
 					response: CompileResponse { success: true, code, .. },
 					stdout,
 					stderr,
-				} => {
-					if let CompiledCode::CodeBin(result) = code {
-						let output_location = format!("./pkg/{}", package_name);
-						let output_location = Path::new(output_location.as_str());
-
-						let _ = fs::remove_dir_all(output_location);
-
-						if let Ok(_) = try_unarchiving(&result, output_location.into()) {
-							CompileCodeResponse::TextSuccess(TextResponseSuccess{result: "Yay".into(), stdout, stderr}.into())
-							// CompileCodeResponse::TextSuccess(text_response.into())
-						} else {
-							CompileCodeResponse::Success(
-								CompileSuccess { result, stdout, stderr }.into(),
-							)
-						}
-					} else if let CompiledCode::CodeStr(result) = code {
-						CompileCodeResponse::TextSuccess(
-							TextResponseSuccess { result, stdout, stderr }.into(),
-						)
-					} else {
-						CompileCodeResponse::InternalError(format!(
-							"Received unknown data type after compile: {code:?}"
-						))
-					}
-				} /* other => {
-				   * 	CompileCodeResponse::InternalError(format!("Unknown problem with compile:
-				   * {other:?}")) } */
+				} => extract_code_response(code, package_name, request_index, stdout, stderr),
+				// other => {CompileCodeResponse::InternalError(format!("Unknown problem with
+				// compile: {other:?}")) }
 			}
 		}
 		Err(e) => {
@@ -175,14 +156,74 @@ async fn do_compile(
 fn try_unarchiving(result: &[u8], output_location: PathBuf) -> io::Result<()> {
 	let mut archive = Archive::new(result);
 	archive.unpack(output_location)
+}
 
-	// if let Ok(_) = archive.unpack(output_location) {
-	// 	println!("Unzipped response into {output_location:?}");
-	// 	Some(TextResponseSuccess{ result: s, stdout: "".into(), stderr: "".into()})
-	// } else {
-	// 	println!("Failed to unzip response");
-	// 	None
-	// }
+fn get_js_glue_file_name(package_location: PathBuf) -> Result<String, String> {
+	if !package_location.exists() {
+		return Err(format!("Package at {package_location:?} does not exist"));
+	}
+
+	let glob_path = package_location.join("*.js");
+
+	let js_glob = glob_path.to_str().ok_or("Somehow failed to make glob string".to_string())?;
+
+	let js_files: Vec<_> = glob(js_glob)
+		.map_err(|_| format!("No javascript files found in {package_location:?}"))?
+		.collect();
+
+	if js_files.len() != 1 {
+		return Err(format!("Expected exactly 1 javascript file, but found {}", js_files.len()));
+	}
+
+	let js_file = js_files.into_iter().nth(0)
+		.ok_or(format!("Something terrible happened in the package directory {package_location:?}. Maybe a race condition?"))?
+		.map_err(|_| format!("Problem retrieving the glob result for {package_location:?}"))?;
+
+	let js_file_str =
+		js_file.to_str().ok_or(format!("Failed to convert PathBuf {js_file:?} to str"))?;
+
+	Ok(js_file_str.into())
+}
+fn get_js_glue_file(package_location: PathBuf) -> Result<String, String> {
+	let js_file = get_js_glue_file_name(package_location)?;
+
+	let result = fs::read_to_string(PathBuf::from(&js_file).clone())
+		.map_err(|_| format!("Failed to read file {js_file:?}"))?;
+
+	Ok(result)
+}
+
+fn extract_code_response(
+	code: CompiledCode,
+	package_name: String,
+	request_index: usize,
+	stdout: String,
+	stderr: String,
+) -> CompileCodeResponse {
+	if let CompiledCode::CodeBin(result) = code {
+		let output_location = format!("./pkg/{package_name}");
+		let output_location = Path::new(output_location.as_str());
+
+		let _ = fs::remove_dir_all(output_location);
+
+		if let Ok(_) = try_unarchiving(&result, output_location.into()) {
+			match get_js_glue_file_name(output_location.into()) {
+				Ok(result) => CompileCodeResponse::TextSuccess(
+					TextResponseSuccess { result, stdout, stderr }.into(),
+				),
+				Err(response) => CompileCodeResponse::InternalError(response),
+			}
+		} else {
+			// TODO: This is a bad fallback...
+			CompileCodeResponse::Success(CompileSuccess { result, stdout, stderr }.into())
+		}
+	} else if let CompiledCode::CodeStr(result) = code {
+		CompileCodeResponse::TextSuccess(TextResponseSuccess { result, stdout, stderr }.into())
+	} else {
+		CompileCodeResponse::InternalError(format!(
+			"Received unknown data type after compile: {code:?}"
+		))
+	}
 }
 
 fn handle_task_panic(task: Result<Result<(), Error>, JoinError>) -> Result<(), Error> {
@@ -209,8 +250,10 @@ fn handle_task_panic(task: Result<Result<(), Error>, JoinError>) -> Result<(), E
 async fn compile_code(
 	code_request: Json<CompileCodeRequest>,
 	manager: &State<Mutex<CoordinatorManager>>,
+	counter: &State<AtomicUsize>,
 ) -> CompileCodeResponse {
-	println!("Compile request received: {:?}", code_request);
+	let current_request = counter.fetch_add(1, Ordering::Relaxed);
+	println!("Compile request {} received: {:?}", current_request, code_request);
 
 	// TODO: Effectively sequential now
 	let mut locked_manager = manager.lock().await;
@@ -220,7 +263,9 @@ async fn compile_code(
 
 	let request_inner = code_request.0.clone();
 	let _spawned = locked_manager
-		.spawn(move |shared_coordinator| do_compile(shared_coordinator, request_inner, sender))
+		.spawn(move |shared_coordinator| {
+			do_compile(shared_coordinator, request_inner, sender, current_request)
+		})
 		.await;
 
 	let response = {
@@ -240,7 +285,6 @@ async fn compile_code(
 			CompileCodeResponse::InternalError("No compile task to await! Not sure how...".into())
 		}
 	};
-	// println!("Response: {response:?}");
 	response
 }
 
@@ -263,6 +307,8 @@ impl Fairing for CORS {
 async fn rocket() -> _ {
 	rocket::build()
 		.manage(Mutex::new(CoordinatorManager::new().await))
+		.manage(AtomicUsize::new(0))
 		.attach(CORS)
 		.mount("/", routes![compile_code])
+		.mount("/pkg", FileServer::new(relative!("../pkg"), Options::None | Options::Missing))
 }

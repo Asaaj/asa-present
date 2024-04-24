@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "js-untar": "^2.0.0",
     "monaco-editor": "^0.45.0"
   }
 }

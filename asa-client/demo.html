@@ -10,9 +10,12 @@
     />
 </head>
 <body>
+    <table>
+        <tr>
+            <td>
     <div id="demo_code"
          class="demo"
-         style="width: 800px; height: 600px; border: 1px solid grey">
+         style="width: 400px; height: 300px; border: 1px solid grey">
         use wasm_bindgen::prelude::*;
 
         #[wasm_bindgen]
@@ -22,14 +25,54 @@
 
         #[wasm_bindgen]
         pub fn greet(name: &str) {
-            alert(&format!("Hello, {}!", name));
+            alert(&format!("Hello, {name}!"));
         }
     </div>
-    <button onclick="compile(this, 'demo_code')">Compile</button>
+            </td>
+            <td>
+    <div id="using_code"
+         class="demo"
+         style="width: 400px; height: 300px; border: 1px solid grey">
+        use wasm_bindgen::prelude::*;
+        use demo_code;
+
+        #[wasm_bindgen]
+        pub fn imports(name: &str) {
+            demo_code::greet(name);
+        }
+    </div>
+            </td>
+        </tr>
+
+        <tr>
+            <td>
+    <div id="demo_code_run"
+         class="demo"
+         style="width: 400px; height: 100px; border: 1px solid grey">
+        (wasm) => {
+            wasm.greet("from the slide");
+        };
+    </div>
+    <button onclick="compile_and_run(this, 'demo_code')">Compile and Run</button>
+            </td>
+            <td>
+    <div id="using_code_run"
+         class="demo"
+         style="width: 400px; height: 100px; border: 1px solid grey">
+        (wasm) => {
+            wasm.imports("from the import");
+        };
+    </div>
+    <button onclick="compile_and_run(this, 'using_code')">Compile and Run</button>
+            </td>
+        </tr>
+    </table>
 
     <script>
         var require = {paths: {vs: './node_modules/monaco-editor/min/vs'}};
     </script>
+
+    <script src="./node_modules/js-untar/build/dist/untar.js"></script>
     <script src="./node_modules/monaco-editor/min/vs/loader.js"></script>
     <script src="./node_modules/monaco-editor/min/vs/editor/editor.main.nls.js"></script>
     <script src="./node_modules/monaco-editor/min/vs/editor/editor.main.js"></script>

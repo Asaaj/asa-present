@@ -92,6 +92,7 @@ version = "0.1.0"
 dependencies = [
  "async-channel",
  "async-mutex",
+ "glob",
  "orchestrator",
  "rocket",
  "serde",

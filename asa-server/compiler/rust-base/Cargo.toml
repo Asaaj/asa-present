@@ -25,3 +25,13 @@ debug = false
 
 [dependencies]
 wasm-bindgen = "0.2.90"
+
+[dependencies.web-sys]
+version = "0.3.4"
+features = [
+    'Document',
+    'Element',
+    'HtmlElement',
+    'Node',
+    'Window',
+]

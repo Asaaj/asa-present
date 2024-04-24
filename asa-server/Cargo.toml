@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 async-mutex = "1.4"
 async-channel = "2.1"
+glob = "0.3"
 orchestrator = { path = "./compiler/rust-base/orchestrator" }
 rocket = { version = "0.5", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }

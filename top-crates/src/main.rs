@@ -85,8 +85,10 @@ fn main() {
 	};
 
 	// Write manifest file.
-	let base_directory: PathBuf =
-		std::env::args_os().nth(1).unwrap_or_else(|| "../asa-server/compiler/rust-base".into()).into();
+	let base_directory: PathBuf = std::env::args_os()
+		.nth(1)
+		.unwrap_or_else(|| "../asa-server/compiler/rust-base".into())
+		.into();
 
 	let cargo_toml = base_directory.join("Cargo.toml");
 	write_manifest(manifest, &cargo_toml);

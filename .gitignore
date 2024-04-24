@@ -5,8 +5,9 @@ wasm-pack.log
 **/*.rs.bk
 
 target/
-/pkg/
+/asa-client/public/pkg/
 *.exe
+/pkg/
 
 node_modules/
 .npm
